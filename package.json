@@ -1,0 +1,32 @@
+{
+  "name": "oberbotspotify",
+  "version": "0.1.0",
+  "description": "AI-driven Discord bot for managing Spotify playlists",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "login": "tsx src/scripts/spotifyLogin.ts",
+    "ai:models": "tsx src/scripts/listAiModels.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.9.1",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "open": "^10.1.0",
+    "openai": "^4.87.3",
+    "p-limit": "^6.2.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^20.17.19",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}
