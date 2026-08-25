@@ -15,6 +15,13 @@ export function playlistResultEmbed(title: string, result: PlaylistActionResult)
     embed.addFields({ name: "Sample tracks", value: result.sampleTracks.map((t) => `• ${t}`).join("\n") });
   }
 
+  if (result.artistsNotFound && result.artistsNotFound.length > 0) {
+    embed.addFields({
+      name: "Not found on Spotify",
+      value: `Couldn't find any tracks by: ${result.artistsNotFound.join(", ")}. Double-check the name matches how it's listed on Spotify.`,
+    });
+  }
+
   if (result.shortfall) {
     embed.setFooter({
       text: "Couldn't find enough matching songs on Spotify to hit the full target — added what resolved cleanly.",
