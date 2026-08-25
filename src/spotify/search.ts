@@ -118,11 +118,24 @@ function artistNameMatches(queriedArtist: string, track: SpotifyTrack): boolean 
  * Filters out same-query hits credited to a differently-named artist (Spotify's search is fuzzy).
  */
 export async function findArtistTracks(artistName: string): Promise<SpotifyTrack[]> {
-  const results = await searchTracks(`artist:"${artistName}"`);
-  const matches = results.filter((t) => artistNameMatches(artistName, t));
-
+  const structuredResults = await searchTracks(`artist:"${artistName}"`);
   const byId = new Map<string, SpotifyTrack>();
-  for (const t of matches) byId.set(t.id, t);
+  for (const t of structuredResults.filter((t) => artistNameMatches(artistName, t))) {
+    byId.set(t.id, t);
+  }
+
+  // The structured `artist:"..."` field query is pickier than a plain query — it can come up
+  // empty for names Spotify's search doesn't tokenize cleanly (e.g. multi-word names with a
+  // lowercase middle word), even though the artist and their tracks are really there. Retry with
+  // a plain query whenever the structured one didn't turn up anything, same fallback pattern as
+  // resolveTrack uses for individual song candidates.
+  if (byId.size === 0) {
+    const plainResults = await searchTracks(artistName);
+    for (const t of plainResults.filter((t) => artistNameMatches(artistName, t))) {
+      byId.set(t.id, t);
+    }
+  }
+
   return [...byId.values()];
 }
 

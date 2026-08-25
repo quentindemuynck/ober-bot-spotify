@@ -7,6 +7,7 @@ import { assertSearchBudgetAvailable } from "./shared/searchBudget.js";
 import { resolveWithBackfill } from "./shared/resolveCandidates.js";
 import { buildKnownTrackSet } from "./shared/unfamiliarFilter.js";
 import { playlistUrlFor, sampleTrackLabels, type PlaylistActionResult } from "./types.js";
+import { logger } from "../util/logger.js";
 
 const AVG_TRACK_MINUTES = 3.5;
 
@@ -30,10 +31,13 @@ export async function runCreatePlaylist(
   // Spotify search rather than left to the AI to suggest — the AI only knows artists it saw in
   // training data, so an unsigned/unfamous artist would otherwise never surface as a candidate at
   // all, even though their tracks are really searchable on Spotify.
+  logger.debug("brief requiredArtists", { requiredArtists: brief.requiredArtists });
+
   const requiredTracks = new Map<string, SpotifyTrack>();
   const artistsNotFound: string[] = [];
   for (const artistName of brief.requiredArtists) {
     const found = await findArtistTracks(artistName);
+    logger.debug("findArtistTracks result", { artistName, foundCount: found.length });
     if (found.length === 0) {
       artistsNotFound.push(artistName);
       continue;

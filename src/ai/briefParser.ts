@@ -11,9 +11,11 @@ Extract:
   library", "deep cuts", "obscure", etc. Otherwise false.
 - styleHints: any extra genre/mood/era/artist-adjacent keywords mentioned (e.g. "DnB", "90s", "workout",
   "acoustic"), as short strings.
-- requiredArtists: any specific artist(s) by name the user explicitly wants songs from (e.g. "songs by
-  Jane Doe", "include my cousin's band The Foo Bars", "artist: X"). This is for naming a particular real
-  artist, not a genre/style word. Empty array if none named.`;
+- requiredArtists: any specific artist(s) by name the user explicitly wants songs from. Trigger on ANY
+  phrasing that names a real artist and asks for their songs, not just "by" — e.g. "songs by X", "songs
+  of X", "tracks from X", "X's music", "include X", "with X in it". This is for naming a particular real
+  artist, not a genre/style word. If styleHints also mentions an artist name, still list it here too.
+  Empty array if none named.`;
 
 export async function parseBrief(prompt: string): Promise<Brief> {
   return structuredComplete({
