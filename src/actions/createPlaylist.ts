@@ -10,6 +10,12 @@ import { playlistUrlFor, sampleTrackLabels, type PlaylistActionResult } from "./
 import { logger } from "../util/logger.js";
 
 const AVG_TRACK_MINUTES = 3.5;
+// Named artists should feel like a seasoning, not the whole playlist — cap how much of it any one
+// of them can fill. Scales with the requested playlist size (and splits across however many
+// artists were named) rather than a flat count, but stays bounded so a big-catalog artist still
+// only contributes a handful of tracks even in a long playlist.
+const REQUIRED_ARTIST_SHARE = 0.2;
+const REQUIRED_ARTIST_MAX_PER_ARTIST = 5;
 
 function estimateTargetCount(length: { type: "count" | "duration_minutes"; value: number }): number {
   if (length.type === "count") return length.value;
@@ -33,16 +39,24 @@ export async function runCreatePlaylist(
   // all, even though their tracks are really searchable on Spotify.
   logger.debug("brief requiredArtists", { requiredArtists: brief.requiredArtists });
 
+  const perArtistCap =
+    brief.requiredArtists.length > 0
+      ? Math.min(
+          REQUIRED_ARTIST_MAX_PER_ARTIST,
+          Math.max(1, Math.round((targetCount * REQUIRED_ARTIST_SHARE) / brief.requiredArtists.length))
+        )
+      : 0;
+
   const requiredTracks = new Map<string, SpotifyTrack>();
   const artistsNotFound: string[] = [];
   for (const artistName of brief.requiredArtists) {
     const found = await findArtistTracks(artistName);
-    logger.debug("findArtistTracks result", { artistName, foundCount: found.length });
+    logger.debug("findArtistTracks result", { artistName, foundCount: found.length, perArtistCap });
     if (found.length === 0) {
       artistsNotFound.push(artistName);
       continue;
     }
-    for (const t of found) requiredTracks.set(t.id, t);
+    for (const t of found.slice(0, perArtistCap)) requiredTracks.set(t.id, t);
   }
 
   const requiredList = [...requiredTracks.values()].slice(0, targetCount);
