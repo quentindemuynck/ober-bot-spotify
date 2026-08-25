@@ -10,7 +10,10 @@ Extract:
 - preferUnfamiliar: true if the user asks for songs they "haven't heard", "new to me", "not already in my
   library", "deep cuts", "obscure", etc. Otherwise false.
 - styleHints: any extra genre/mood/era/artist-adjacent keywords mentioned (e.g. "DnB", "90s", "workout",
-  "acoustic"), as short strings.`;
+  "acoustic"), as short strings.
+- requiredArtists: any specific artist(s) by name the user explicitly wants songs from (e.g. "songs by
+  Jane Doe", "include my cousin's band The Foo Bars", "artist: X"). This is for naming a particular real
+  artist, not a genre/style word. Empty array if none named.`;
 
 export async function parseBrief(prompt: string): Promise<Brief> {
   return structuredComplete({

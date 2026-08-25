@@ -12,6 +12,12 @@ export const BriefSchema = z.object({
     .boolean()
     .describe("True if the user wants mostly songs they likely haven't heard before"),
   styleHints: z.array(z.string()).describe("Extra genre/mood/era keywords extracted from the prompt"),
+  requiredArtists: z
+    .array(z.string())
+    .describe(
+      "Specific named artist(s) the user explicitly wants songs from (e.g. 'songs by X', 'my cousin Jane's " +
+        "tracks', 'include Y'), as opposed to a genre/style. Empty if none named."
+    ),
 });
 export type Brief = z.infer<typeof BriefSchema>;
 

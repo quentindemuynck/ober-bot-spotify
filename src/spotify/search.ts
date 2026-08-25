@@ -100,6 +100,32 @@ export async function resolveTrack(candidate: SongCandidate): Promise<ResolvedCa
   };
 }
 
+const ARTIST_MATCH_THRESHOLD = 0.8;
+
+function artistNameMatches(queriedArtist: string, track: SpotifyTrack): boolean {
+  const target = normalize(queriedArtist);
+  return track.artists.some((a) => {
+    if (normalize(a.name) === target) return true;
+    return tokenOverlapScore(queriedArtist, a.name) >= ARTIST_MATCH_THRESHOLD;
+  });
+}
+
+/**
+ * Looks up a named artist's own tracks directly on Spotify, bypassing the AI song-suggestion step
+ * entirely. This exists because the AI can only suggest songs it has seen in training data — for a
+ * small/unsigned artist it has never heard of, it will never generate their tracks as candidates no
+ * matter how the theme is worded, even though the artist and their songs are really on Spotify.
+ * Filters out same-query hits credited to a differently-named artist (Spotify's search is fuzzy).
+ */
+export async function findArtistTracks(artistName: string): Promise<SpotifyTrack[]> {
+  const results = await searchTracks(`artist:"${artistName}"`);
+  const matches = results.filter((t) => artistNameMatches(artistName, t));
+
+  const byId = new Map<string, SpotifyTrack>();
+  for (const t of matches) byId.set(t.id, t);
+  return [...byId.values()];
+}
+
 /** Makes one minimal, real search call to check whether Spotify search is currently reachable
  * (vs. mid-lockout from the Development Mode daily quota). Used by the status command. */
 export async function probeSearchAvailability(): Promise<{ available: boolean; detail?: string }> {

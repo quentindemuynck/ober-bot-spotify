@@ -8,6 +8,8 @@ export interface PlaylistSummary {
 
 export interface PlaylistActionResult extends PlaylistSummary {
   shortfall: boolean;
+  /** Names from requiredArtists that had no matching tracks found on Spotify search. */
+  artistsNotFound?: string[];
 }
 
 export interface SplitActionResult {

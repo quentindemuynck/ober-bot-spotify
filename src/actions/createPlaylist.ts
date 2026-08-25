@@ -1,6 +1,8 @@
 import { parseBrief } from "../ai/briefParser.js";
 import { generateCreateCandidates } from "../ai/songSuggester.js";
 import { addTracksToPlaylist, createPlaylist as createSpotifyPlaylist } from "../spotify/playlists.js";
+import { findArtistTracks } from "../spotify/search.js";
+import type { SpotifyTrack } from "../spotify/types.js";
 import { assertSearchBudgetAvailable } from "./shared/searchBudget.js";
 import { resolveWithBackfill } from "./shared/resolveCandidates.js";
 import { buildKnownTrackSet } from "./shared/unfamiliarFilter.js";
@@ -24,14 +26,42 @@ export async function runCreatePlaylist(
 
   const knownSet = brief.preferUnfamiliar ? await buildKnownTrackSet() : null;
 
-  const { tracks, shortfall } = await resolveWithBackfill({
-    targetCount,
-    generate: (excludeTitles, count) => generateCreateCandidates(brief, count, excludeTitles),
-    isAcceptable: knownSet ? (track) => !knownSet.isKnown(track) : undefined,
-    onProgress,
-  });
+  // Explicitly-named artists (e.g. "songs by my cousin Jane Doe") are resolved directly against
+  // Spotify search rather than left to the AI to suggest — the AI only knows artists it saw in
+  // training data, so an unsigned/unfamous artist would otherwise never surface as a candidate at
+  // all, even though their tracks are really searchable on Spotify.
+  const requiredTracks = new Map<string, SpotifyTrack>();
+  const artistsNotFound: string[] = [];
+  for (const artistName of brief.requiredArtists) {
+    const found = await findArtistTracks(artistName);
+    if (found.length === 0) {
+      artistsNotFound.push(artistName);
+      continue;
+    }
+    for (const t of found) requiredTracks.set(t.id, t);
+  }
 
-  let selected = tracks.map((r) => r.track);
+  const requiredList = [...requiredTracks.values()].slice(0, targetCount);
+  const remainingTarget = targetCount - requiredList.length;
+  const requiredTitles = requiredList.map((t) => `${t.artists[0]?.name ?? ""} - ${t.name}`);
+
+  const { tracks, shortfall } =
+    remainingTarget > 0
+      ? await resolveWithBackfill({
+          targetCount: remainingTarget,
+          generate: (excludeTitles, count) =>
+            generateCreateCandidates(brief, count, [...excludeTitles, ...requiredTitles]),
+          isAcceptable: knownSet ? (track) => !knownSet.isKnown(track) : undefined,
+          onProgress,
+        })
+      : { tracks: [], shortfall: false };
+
+  const combined = new Map<string, SpotifyTrack>();
+  for (const t of requiredList) combined.set(t.id, t);
+  for (const r of tracks) combined.set(r.track.id, r.track);
+  const overallShortfall = shortfall || combined.size < targetCount;
+
+  let selected = [...combined.values()];
   if (brief.length.type === "duration_minutes") {
     const targetMs = brief.length.value * 60_000;
     let cumulativeMs = 0;
@@ -63,6 +93,7 @@ export async function runCreatePlaylist(
     name: playlist.name,
     trackCount: selected.length,
     sampleTracks: sampleTrackLabels(selected),
-    shortfall,
+    shortfall: overallShortfall,
+    artistsNotFound: artistsNotFound.length > 0 ? artistsNotFound : undefined,
   };
 }
