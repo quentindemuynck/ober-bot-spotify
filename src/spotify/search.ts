@@ -21,8 +21,15 @@ function normalize(text: string): string {
     .trim();
 }
 
+/** Identity key for "is this the same song", collapsing different versions/pressings (feat.
+ * credit variants, remasters, live cuts, radio edits — see normalize()) of the same title down to
+ * one key, regardless of which Spotify track ID that particular version happens to have. */
+export function songIdentityKey(artist: string, title: string): string {
+  return `${normalize(artist)}::${normalize(title)}`;
+}
+
 function candidateCacheKey(candidate: SongCandidate): string {
-  return `${normalize(candidate.artist)}::${normalize(candidate.title)}`;
+  return songIdentityKey(candidate.artist, candidate.title);
 }
 
 function tokenOverlapScore(a: string, b: string): number {
@@ -119,24 +126,28 @@ function artistNameMatches(queriedArtist: string, track: SpotifyTrack): boolean 
  */
 export async function findArtistTracks(artistName: string): Promise<SpotifyTrack[]> {
   const structuredResults = await searchTracks(`artist:"${artistName}"`);
-  const byId = new Map<string, SpotifyTrack>();
-  for (const t of structuredResults.filter((t) => artistNameMatches(artistName, t))) {
-    byId.set(t.id, t);
-  }
+  let matches = structuredResults.filter((t) => artistNameMatches(artistName, t));
 
   // The structured `artist:"..."` field query is pickier than a plain query — it can come up
   // empty for names Spotify's search doesn't tokenize cleanly (e.g. multi-word names with a
   // lowercase middle word), even though the artist and their tracks are really there. Retry with
   // a plain query whenever the structured one didn't turn up anything, same fallback pattern as
   // resolveTrack uses for individual song candidates.
-  if (byId.size === 0) {
+  if (matches.length === 0) {
     const plainResults = await searchTracks(artistName);
-    for (const t of plainResults.filter((t) => artistNameMatches(artistName, t))) {
-      byId.set(t.id, t);
-    }
+    matches = plainResults.filter((t) => artistNameMatches(artistName, t));
   }
 
-  return [...byId.values()];
+  // Collabs and reissues can surface the same song under multiple track IDs (a "feat." credit
+  // variant, a different album pressing, a remaster) — collapse those down to one per underlying
+  // song instead of counting/including each as if it were a different track.
+  const byTitle = new Map<string, SpotifyTrack>();
+  for (const t of matches) {
+    const key = normalize(t.name);
+    if (!byTitle.has(key)) byTitle.set(key, t);
+  }
+
+  return [...byTitle.values()];
 }
 
 /** Makes one minimal, real search call to check whether Spotify search is currently reachable

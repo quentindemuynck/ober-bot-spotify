@@ -1,7 +1,7 @@
 import { parseBrief } from "../ai/briefParser.js";
 import { generateCreateCandidates } from "../ai/songSuggester.js";
 import { addTracksToPlaylist, createPlaylist as createSpotifyPlaylist } from "../spotify/playlists.js";
-import { findArtistTracks } from "../spotify/search.js";
+import { findArtistTracks, songIdentityKey } from "../spotify/search.js";
 import type { SpotifyTrack } from "../spotify/types.js";
 import { assertSearchBudgetAvailable } from "./shared/searchBudget.js";
 import { resolveWithBackfill } from "./shared/resolveCandidates.js";
@@ -47,6 +47,8 @@ export async function runCreatePlaylist(
         )
       : 0;
 
+  // Keyed by normalized artist+title (not track ID) so a collab pulled in by two different named
+  // artists, or a duplicate pressing/version, still only counts once.
   const requiredTracks = new Map<string, SpotifyTrack>();
   const artistsNotFound: string[] = [];
   for (const artistName of brief.requiredArtists) {
@@ -56,7 +58,9 @@ export async function runCreatePlaylist(
       artistsNotFound.push(artistName);
       continue;
     }
-    for (const t of found.slice(0, perArtistCap)) requiredTracks.set(t.id, t);
+    for (const t of found.slice(0, perArtistCap)) {
+      requiredTracks.set(songIdentityKey(t.artists[0]?.name ?? "", t.name), t);
+    }
   }
 
   const requiredList = [...requiredTracks.values()].slice(0, targetCount);
@@ -74,9 +78,12 @@ export async function runCreatePlaylist(
         })
       : { tracks: [], shortfall: false };
 
+  // Same identity-based dedup here — an AI-suggested track can independently resolve to a
+  // different version/pressing of a song already pulled in via a required artist (or via another
+  // AI candidate), which a plain track-ID key wouldn't catch.
   const combined = new Map<string, SpotifyTrack>();
-  for (const t of requiredList) combined.set(t.id, t);
-  for (const r of tracks) combined.set(r.track.id, r.track);
+  for (const t of requiredList) combined.set(songIdentityKey(t.artists[0]?.name ?? "", t.name), t);
+  for (const r of tracks) combined.set(songIdentityKey(r.track.artists[0]?.name ?? "", r.track.name), r.track);
   const overallShortfall = shortfall || combined.size < targetCount;
 
   let selected = [...combined.values()];
